@@ -42,8 +42,15 @@ export async function listSamples() {
   return data
 }
 
-export async function listJobs() {
-  const { data } = await api.get('/jobs')
+export async function listJobs(filters = {}) {
+  // 筛选在服务端收缩：status 可多值（重复 query 参数），q 为样例名关键字。
+  const params = new URLSearchParams()
+  const statuses = Array.isArray(filters.statuses) ? filters.statuses : []
+  statuses.forEach((s) => params.append('status', s))
+  if (filters.q && filters.q.trim()) {
+    params.append('q', filters.q.trim())
+  }
+  const { data } = await api.get('/jobs', { params })
   return data
 }
 

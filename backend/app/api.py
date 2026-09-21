@@ -1,4 +1,4 @@
-from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, status
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query, status
 from sqlalchemy.orm import Session, joinedload
 
 from app.auth import authenticate_user, create_access_token, get_current_user, require_bioops
@@ -18,6 +18,8 @@ from app.schemas import (
 
 
 router = APIRouter(prefix="/api")
+
+JOB_STATUSES = {"pending", "running", "success", "failed"}
 
 
 def _run_job_background(job_id: int) -> None:
@@ -97,8 +99,29 @@ def create_job(
 
 
 @router.get("/jobs", response_model=list[JobListItem])
-def list_jobs(_user: dict = Depends(get_current_user), db: Session = Depends(get_db)):
-    return db.query(Job).order_by(Job.id.desc()).all()
+def list_jobs(
+    statuses: list[str] | None = Query(default=None, alias="status"),
+    q: str | None = Query(default=None, max_length=128),
+    _user: dict = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    query = db.query(Job)
+
+    if statuses:
+        # 非法状态值直接拒绝（422），不做静默忽略，避免“没勾对却看到全量”。
+        invalid = [s for s in statuses if s not in JOB_STATUSES]
+        if invalid:
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail=f"非法的状态筛选值: {', '.join(invalid)}",
+            )
+        query = query.filter(Job.status.in_(statuses))
+
+    if q and q.strip():
+        # 样例名关键字在数据库侧收缩，多状态与关键字为 AND 叠加。
+        query = query.filter(Job.sample_name.ilike(f"%{q.strip()}%"))
+
+    return query.order_by(Job.id.desc()).all()
 
 
 @router.get("/jobs/{job_id}", response_model=JobOut)
