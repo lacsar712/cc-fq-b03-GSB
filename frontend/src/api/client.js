@@ -42,8 +42,16 @@ export async function listSamples() {
   return data
 }
 
-export async function listJobs() {
-  const { data } = await api.get('/jobs')
+export async function listJobs({ statuses = [], keyword = '' } = {}) {
+  const params = {}
+  if (statuses.length) params.status = statuses
+  const kw = (keyword || '').trim()
+  if (kw) params.keyword = kw
+  const { data } = await api.get('/jobs', {
+    params,
+    // FastAPI 的 list 查询参数需要重复键：?status=a&status=b
+    paramsSerializer: { indexes: null },
+  })
   return data
 }
 

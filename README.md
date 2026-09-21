@@ -47,7 +47,8 @@ docker compose up --build
 3. 作业详情页看到四个 Actor 阶段均为成功，指标卡出现 `reads` / `mean_quality` / `n_rate`。
 4. 再跑损坏样例：`ParseActor` = failed，其余 = skipped。
 5. 退出，用 `auditor` / `audit123456` 登录：可看历史与详情，提交作业接口返回 403 / 前端无提交入口。
-6. 健康检查：`curl http://localhost:8184/api/health`
+6. 历史页筛选（两角色可用）：状态多选「失败」+ 样例名关键字 `broken` → 只剩匹配的失败单；无命中时空表并显示说明，不回退全量；筛选条件写入 URL query，刷新后自动恢复。
+7. 健康检查：`curl http://localhost:8184/api/health`
 
 ## API
 
@@ -55,7 +56,7 @@ docker compose up --build
 - `GET  /api/health`
 - `GET  /api/samples`
 - `POST /api/jobs` `{ "sampleId": 1 }` 或 `{ "fastqText": "..." }`
-- `GET  /api/jobs`
+- `GET  /api/jobs` — 支持服务端筛选：`?status=failed&status=pending`（状态多选，重复参数）+ `&keyword=broken`（样例名模糊匹配，大小写不敏感），两者可叠加；无命中返回空列表，不回退全量
 - `GET  /api/jobs/{id}`
 - `GET  /api/jobs/{id}/stages`
 

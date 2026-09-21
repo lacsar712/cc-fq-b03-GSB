@@ -1,4 +1,4 @@
-from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, status
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query, status
 from sqlalchemy.orm import Session, joinedload
 
 from app.auth import authenticate_user, create_access_token, get_current_user, require_bioops
@@ -96,9 +96,35 @@ def create_job(
     return job
 
 
+VALID_JOB_STATUSES = ("pending", "running", "success", "failed")
+
+
 @router.get("/jobs", response_model=list[JobListItem])
-def list_jobs(_user: dict = Depends(get_current_user), db: Session = Depends(get_db)):
-    return db.query(Job).order_by(Job.id.desc()).all()
+def list_jobs(
+    job_status: list[str] | None = Query(default=None, alias="status"),
+    keyword: str | None = Query(default=None),
+    _user: dict = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """作业历史：状态多选 + 样例名关键字，均在服务端过滤，两者 AND 叠加。
+
+    无命中时返回空列表（前端展示空表说明），不回退为全量。
+    """
+    statuses = [s.strip() for s in (job_status or []) if s and s.strip()]
+    invalid = [s for s in statuses if s not in VALID_JOB_STATUSES]
+    if invalid:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"无效状态值: {', '.join(invalid)}（可选: {', '.join(VALID_JOB_STATUSES)}）",
+        )
+
+    query = db.query(Job)
+    if statuses:
+        query = query.filter(Job.status.in_(statuses))
+    kw = (keyword or "").strip()
+    if kw:
+        query = query.filter(Job.sample_name.ilike(f"%{kw}%"))
+    return query.order_by(Job.id.desc()).all()
 
 
 @router.get("/jobs/{job_id}", response_model=JobOut)
